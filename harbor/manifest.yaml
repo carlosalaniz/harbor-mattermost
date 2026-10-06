@@ -1,0 +1,84 @@
+apiVersion: harbor/v1alpha1
+kind: Application
+metadata:
+  id: mattermost
+  name: "Mattermost"
+  description: "Mattermost Team Edition 11.5 chat with PostgreSQL 15 (pgvector). Files are stored in the app's own volume."
+release:
+  revision: "1"
+  version: "11.5.1"
+deployment:
+  compose: compose.yaml
+  multiInstance: false
+  services:
+    mattermost: application
+    mattermost-db: infrastructure
+endpoints:
+  web:
+    service: mattermost
+    containerPort: 8065
+    scheme: http
+    exposure: direct
+    browserContext: ordinary
+# /api/v4/system/ping answers before any account exists. The first start runs the database
+# migrations (a minute or two on a copied database), hence the long deadline.
+health:
+  endpoint: web
+  path: /api/v4/system/ping
+  expectedStatus: [200]
+  timeoutSeconds: 10
+  deadlineSeconds: 600
+ui:
+  primaryEndpoint: web
+setup:
+  endpoint: web
+  instructions: "Create the first account on the sign-up page; it becomes the System Admin. Set up email (SMTP) under System Console, Environment, SMTP."
+# Links Mattermost sends out (emails, notifications, invites) use Harbor's main address for this app.
+configuration:
+  - service: mattermost
+    environment: MM_SERVICESETTINGS_SITEURL
+    endpoint: web
+    format: origin
+storage:
+  - id: db
+    composeVolume: db
+    purpose: "PostgreSQL database (posts, channels, users)"
+    retention: retain
+  - id: config
+    composeVolume: config
+    purpose: "Mattermost config.json (System Console settings, SMTP)"
+    retention: retain
+  - id: data
+    composeVolume: data
+    purpose: "Uploaded files and attachments"
+    retention: retain
+  - id: logs
+    composeVolume: logs
+    purpose: "Mattermost logs"
+    retention: retain
+  - id: plugins
+    composeVolume: plugins
+    purpose: "Server plugins"
+    retention: retain
+  - id: client-plugins
+    composeVolume: client-plugins
+    purpose: "Web app plugin bundles"
+    retention: retain
+  - id: bleve
+    composeVolume: bleve
+    purpose: "Bleve search indexes (rebuildable)"
+    retention: retain
+secrets:
+  - id: db-password
+    bytes: 32
+    encoding: hex
+    retention: retain
+    bindings:
+      - {service: mattermost-db, environment: POSTGRES_PASSWORD}
+      - {service: mattermost, environment: PGPASSWORD}
+presentation:
+  tagline: "Team chat: channels, threads, files and calls"
+  category: productivity
+  developer: "Mattermost, Inc., packaged for Harbor"
+  website: https://mattermost.com
+  releaseNotes: "Revision 1: Mattermost Team Edition 11.5.1 with PostgreSQL 15 (pgvector) and local file storage."
